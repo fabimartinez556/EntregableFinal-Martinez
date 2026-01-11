@@ -1,37 +1,9 @@
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-
-import HomeScreen from "../screens/HomeScreen";
-import DetailScreen from "../screens/DetailScreen";
-
-const Stack = createNativeStackNavigator();
+import { useSelector } from "react-redux";
+import BottomTabs from "./BottomTabs";
+import AuthStack from "./AuthStack";
 
 export default function Navigator() {
-  return (
-    <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{
-          headerStyle: { backgroundColor: "teal" },
-          headerTintColor: "#fff",
-          headerTitleStyle: { fontWeight: "bold" },
-        }}
-      >
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{
-            title: "Mis Tareas",
-          }}
-        />
+  const user = useSelector((state) => state.auth.user);
 
-        <Stack.Screen
-          name="Detail"
-          component={DetailScreen}
-          options={({ route }) => ({
-            title: route?.params?.description ?? "Detalle",
-          })}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
+  return user ? <BottomTabs /> : <AuthStack />;
 }
