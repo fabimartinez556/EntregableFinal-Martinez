@@ -3,16 +3,20 @@ import {
   query,
   where,
   getDocs,
-  orderBy,
   addDoc,
   doc,
   updateDoc,
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
+import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db } from "../firebase/firebaseConfig";
-import { setOrders, setOrdersLoading, setOrdersError } from "./ordersSlice";
+import {
+  setOrders,
+  setOrdersLoading,
+  setOrdersError,
+} from "./ordersSlice";
 import { clearCart } from "./cartSlice";
 
 /* =======================
@@ -25,8 +29,7 @@ export const fetchOrders = (userId) => {
 
       const q = query(
         collection(db, "orders"),
-        where("userId", "==", userId),
-
+        where("userId", "==", userId)
       );
 
       const snapshot = await getDocs(q);
@@ -77,7 +80,8 @@ export const createOrder = (items, total, user, onComplete) => {
 
       if (onComplete) onComplete();
     } catch (error) {
-      console.error("Error creando la orden", error);
+      dispatch(setOrdersError(error.message));
+      Alert.alert("Error", "No se pudo crear la orden");
     }
   };
 };

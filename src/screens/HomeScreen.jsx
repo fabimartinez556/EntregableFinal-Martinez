@@ -24,14 +24,27 @@ export default function HomeScreen() {
 
   useEffect(() => {
     dispatch(fetchProducts());
-  }, []);
+  }, [dispatch]);
 
   const handleLogout = async () => {
     await signOut(auth);
   };
 
+  const buildUpdatedCart = (items, product) => {
+    const found = items.find((i) => i.id === product.id);
+
+    if (found) {
+      return items.map((i) =>
+        i.id === product.id
+          ? { ...i, quantity: i.quantity + 1 }
+          : i
+      );
+    }
+
+    return [...items, { ...product, quantity: 1 }];
+  };
+
   const handleAddToCart = (item) => {
-    // Verificar stock antes de agregar
     const cartItem = cartItems.find((ci) => ci.id === item.id);
     const currentQty = cartItem ? cartItem.quantity : 0;
 
@@ -43,14 +56,9 @@ export default function HomeScreen() {
       return;
     }
 
-    // Agregar al carrito
     dispatch(addToCart({ ...item, quantity: 1 }));
 
-    // Guardar carrito actualizado en AsyncStorage
-    const updatedCart = cartItems.map((ci) =>
-      ci.id === item.id ? { ...ci, quantity: ci.quantity + 1 } : ci
-    );
-    if (!cartItem) updatedCart.push({ ...item, quantity: 1 });
+    const updatedCart = buildUpdatedCart(cartItems, item);
     dispatch(saveCart(updatedCart));
   };
 

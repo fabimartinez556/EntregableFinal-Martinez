@@ -1,7 +1,9 @@
 import { View, Text, FlatList, Button, StyleSheet, Alert } from "react-native";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ScreenContainer from "../components/ScreenContainer";
 import Header from "../components/Header";
+import ConfirmModal from "../components/ConfirmModal";
 import { removeFromCart } from "../store/cartSlice";
 import { saveCart } from "../store/cartThunks";
 import { createOrder } from "../store/ordersThunks";
@@ -10,6 +12,9 @@ export default function CartScreen({ navigation }) {
   const dispatch = useDispatch();
   const cartItems = useSelector((state) => state.cart.items);
   const user = useSelector((state) => state.auth.user);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   const total = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -22,13 +27,19 @@ export default function CartScreen({ navigation }) {
     dispatch(saveCart(updatedCart));
   };
 
+  const confirmRemove = () => {
+    if (!selectedItem) return;
+    handleRemove(selectedItem.id);
+    setSelectedItem(null);
+    setModalVisible(false);
+  };
+
   const handleCheckout = () => {
     if (!user) {
       Alert.alert("Error", "Debés estar logueado");
       return;
     }
 
-    // 🔥 THUNK CORRECTO
     dispatch(
       createOrder(cartItems, total, user, () => {
         navigation.navigate("Orders");
@@ -55,7 +66,10 @@ export default function CartScreen({ navigation }) {
                 <Text>Precio: ${item.price}</Text>
                 <Button
                   title="Eliminar"
-                  onPress={() => handleRemove(item.id)}
+                  onPress={() => {
+                    setSelectedItem(item);
+                    setModalVisible(true);
+                  }}
                 />
               </View>
             )}
@@ -66,6 +80,21 @@ export default function CartScreen({ navigation }) {
           <Button title="Finalizar compra" onPress={handleCheckout} />
         </>
       )}
+
+      <ConfirmModal
+        visible={modalVisible}
+        title="Eliminar producto"
+        message={
+          selectedItem
+            ? `¿Eliminar ${selectedItem.title} del carrito?`
+            : ""
+        }
+        onConfirm={confirmRemove}
+        onCancel={() => {
+          setSelectedItem(null);
+          setModalVisible(false);
+        }}
+      />
     </ScreenContainer>
   );
 }
