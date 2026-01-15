@@ -6,11 +6,14 @@ import Navigator from "./src/navigation/Navigator";
 import { setUser, logout } from "./src/store/authSlice";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/firebase/firebaseConfig";
+import { loadCart } from "./src/store/cartThunks";
 
 function AppContent() {
   const dispatch = useDispatch();
 
   useEffect(() => {
+    dispatch(loadCart());
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         dispatch(
