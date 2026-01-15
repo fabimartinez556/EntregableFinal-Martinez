@@ -7,6 +7,7 @@ import { setUser, logout } from "./src/store/authSlice";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/firebase/firebaseConfig";
 import { loadCart } from "./src/store/cartThunks";
+import Toast from "./src/components/Toast";
 
 function AppContent() {
   const dispatch = useDispatch();
@@ -28,9 +29,14 @@ function AppContent() {
     });
 
     return unsubscribe;
-  }, []);
+  }, [dispatch]);
 
-  return <Navigator />;
+  return (
+    <>
+      <Navigator />
+      <Toast />
+    </>
+  );
 }
 
 export default function App() {

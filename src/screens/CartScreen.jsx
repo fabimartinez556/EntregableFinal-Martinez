@@ -1,4 +1,12 @@
-import { View, Text, FlatList, Button, StyleSheet, Alert } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  Button,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ScreenContainer from "../components/ScreenContainer";
@@ -12,6 +20,7 @@ export default function CartScreen({ navigation }) {
   const dispatch = useDispatch();
   const cartItems = useSelector((state) => state.cart.items);
   const user = useSelector((state) => state.auth.user);
+  const ordersLoading = useSelector((state) => state.orders.loading);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -43,7 +52,6 @@ export default function CartScreen({ navigation }) {
     dispatch(
       createOrder(cartItems, total, user, () => {
         navigation.navigate("Orders");
-        Alert.alert("Compra realizada", "Tu orden fue creada");
       })
     );
   };
@@ -52,7 +60,14 @@ export default function CartScreen({ navigation }) {
     <ScreenContainer>
       <Header title="Carrito" />
 
-      {cartItems.length === 0 ? (
+      {ordersLoading && (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" />
+          <Text>Procesando compra...</Text>
+        </View>
+      )}
+
+      {cartItems.length === 0 && !ordersLoading ? (
         <Text style={styles.empty}>Carrito vacío</Text>
       ) : (
         <>
@@ -70,6 +85,7 @@ export default function CartScreen({ navigation }) {
                     setSelectedItem(item);
                     setModalVisible(true);
                   }}
+                  disabled={ordersLoading}
                 />
               </View>
             )}
@@ -77,7 +93,11 @@ export default function CartScreen({ navigation }) {
 
           <Text style={styles.total}>Total: ${total}</Text>
 
-          <Button title="Finalizar compra" onPress={handleCheckout} />
+          <Button
+            title="Finalizar compra"
+            onPress={handleCheckout}
+            disabled={ordersLoading}
+          />
         </>
       )}
 
@@ -117,5 +137,12 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginVertical: 20,
     textAlign: "center",
+  },
+  loader: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
 });

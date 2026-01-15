@@ -20,9 +20,16 @@ const ordersSlice = createSlice({
       state.error = action.payload;
       state.loading = false;
     },
+    setOrdersFinished(state) {
+      state.loading = false;
+    },
   },
 });
 
-export const { setOrders, setOrdersLoading, setOrdersError } =
-  ordersSlice.actions;
+export const {
+  setOrders,
+  setOrdersLoading,
+  setOrdersError,
+  setOrdersFinished,
+} = ordersSlice.actions;
 export default ordersSlice.reducer;

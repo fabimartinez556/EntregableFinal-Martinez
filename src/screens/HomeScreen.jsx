@@ -5,7 +5,6 @@ import {
   Image,
   StyleSheet,
   Button,
-  Alert,
 } from "react-native";
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -16,6 +15,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
 import { addToCart } from "../store/cartSlice";
 import { saveCart } from "../store/cartThunks";
+import { showToast } from "../store/uiSlice";
 
 export default function HomeScreen() {
   const dispatch = useDispatch();
@@ -30,36 +30,47 @@ export default function HomeScreen() {
     await signOut(auth);
   };
 
-  const buildUpdatedCart = (items, product) => {
-    const found = items.find((i) => i.id === product.id);
+  /* ===========================
+     agregar al carrito
+  ============================ */
+  const handleAddToCart = (product) => {
+    const cartItem = cartItems.find(
+      (ci) => ci.id === product.id
+    );
 
-    if (found) {
-      return items.map((i) =>
-        i.id === product.id
-          ? { ...i, quantity: i.quantity + 1 }
-          : i
-      );
-    }
-
-    return [...items, { ...product, quantity: 1 }];
-  };
-
-  const handleAddToCart = (item) => {
-    const cartItem = cartItems.find((ci) => ci.id === item.id);
     const currentQty = cartItem ? cartItem.quantity : 0;
 
-    if (currentQty + 1 > item.stock) {
-      Alert.alert(
-        "Stock insuficiente",
-        `No hay suficiente stock de ${item.title}`
+    // No permitir superar stock
+    if (currentQty >= product.stock) {
+      dispatch(
+        showToast({
+          message: "Stock insuficiente",
+          type: "error",
+        })
       );
       return;
     }
 
-    dispatch(addToCart({ ...item, quantity: 1 }));
+    // Redux (cantidad +1)
+    dispatch(addToCart({ ...product, quantity: 1 }));
 
-    const updatedCart = buildUpdatedCart(cartItems, item);
+    // Persistencia local
+    const updatedCart = cartItem
+      ? cartItems.map((i) =>
+          i.id === product.id
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
+        )
+      : [...cartItems, { ...product, quantity: 1 }];
+
     dispatch(saveCart(updatedCart));
+
+    dispatch(
+      showToast({
+        message: "Producto agregado al carrito",
+        type: "success",
+      })
+    );
   };
 
   return (
@@ -77,22 +88,38 @@ export default function HomeScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Image
-              source={{ uri: item.image }}
-              style={styles.image}
-              resizeMode="contain"
-            />
-            <Text style={styles.title}>{item.title}</Text>
-            <Text>${item.price}</Text>
-            <Text>Stock: {item.stock}</Text>
-            <Button
-              title="Agregar al carrito"
-              onPress={() => handleAddToCart(item)}
-            />
-          </View>
-        )}
+        renderItem={({ item }) => {
+          const cartItem = cartItems.find(
+            (ci) => ci.id === item.id
+          );
+
+          const qtyInCart = cartItem ? cartItem.quantity : 0;
+          const outOfStock = item.stock <= qtyInCart;
+
+          return (
+            <View style={styles.card}>
+              <Image
+                source={{ uri: item.image }}
+                style={styles.image}
+                resizeMode="contain"
+              />
+
+              <Text style={styles.title}>{item.title}</Text>
+              <Text>${item.price}</Text>
+              <Text>Stock: {item.stock - qtyInCart}</Text>
+
+              <Button
+                title={
+                  outOfStock
+                    ? "Sin stock"
+                    : "Agregar al carrito"
+                }
+                disabled={outOfStock}
+                onPress={() => handleAddToCart(item)}
+              />
+            </View>
+          );
+        }}
       />
     </ScreenContainer>
   );
