@@ -1,14 +1,9 @@
 import {
-  collection,
-  query,
-  where,
-  getDocs,
   doc,
-  serverTimestamp,
   runTransaction,
 } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { db } from "../firebase/firebaseConfig";
+import { db, realtimeDb } from "../firebase/firebaseConfig";
 import {
   setOrders,
   setOrdersLoading,
@@ -18,25 +13,28 @@ import {
 import { clearCart } from "./cartSlice";
 import { fetchProducts } from "./productsThunks";
 import { showToast } from "./uiSlice";
+import { ref, push, set, get } from "firebase/database";
 
 /* =======================
-   FETCH ORDERS
+   FETCH ORDERS (REALTIME DB)
 ======================= */
 export const fetchOrders = (userId) => {
   return async (dispatch) => {
     try {
       dispatch(setOrdersLoading());
 
-      const q = query(
-        collection(db, "orders"),
-        where("userId", "==", userId)
-      );
+      const snapshot = await get(ref(realtimeDb, `orders/${userId}`));
 
-      const snapshot = await getDocs(q);
+      if (!snapshot.exists()) {
+        dispatch(setOrders([]));
+        return;
+      }
 
-      const orders = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const data = snapshot.val();
+
+      const orders = Object.entries(data).map(([id, order]) => ({
+        id,
+        ...order,
       }));
 
       dispatch(setOrders(orders));
@@ -49,13 +47,16 @@ export const fetchOrders = (userId) => {
 /* =======================
    CREATE ORDER
 ======================= */
-export const createOrder = (items, total, user, onComplete) => {
+export const createOrder = (items, total, user, location, onComplete) => {
   return async (dispatch) => {
     try {
       dispatch(setOrdersLoading());
 
+      // 🔒 TRANSACTION: validar y descontar stock
       await runTransaction(db, async (transaction) => {
-        // 🔒 Validar y descontar stock
+        const productsData = [];
+
+        // 1️⃣ TODAS LAS LECTURAS
         for (const item of items) {
           const productRef = doc(db, "productos", item.id);
           const productSnap = await transaction.get(productRef);
@@ -70,23 +71,33 @@ export const createOrder = (items, total, user, onComplete) => {
             throw new Error(`Stock insuficiente de ${item.title}`);
           }
 
-          transaction.update(productRef, {
-            stock: currentStock - item.quantity,
+          productsData.push({
+            ref: productRef,
+            newStock: currentStock - item.quantity,
           });
         }
 
-        // 🧾 Crear orden
-        const orderRef = doc(collection(db, "orders"));
-        transaction.set(orderRef, {
-          userId: user.uid,
-          email: user.email,
-          items,
-          total,
-          createdAt: serverTimestamp(),
-        });
+        // 2️⃣ TODAS LAS ESCRITURAS
+        for (const product of productsData) {
+          transaction.update(product.ref, {
+            stock: product.newStock,
+          });
+        }
       });
 
-      // 🧼 Vaciar carrito inmediato
+      // 🧾 CREAR ORDEN EN REALTIME DATABASE
+      const orderRef = push(ref(realtimeDb, `orders/${user.uid}`));
+
+      await set(orderRef, {
+        items,
+        total,
+        email: user.email,
+        location,
+        status: "pendiente",
+        createdAt: Date.now(),
+      });
+
+      // 🧼 Vaciar carrito
       dispatch(clearCart());
       await AsyncStorage.removeItem("@cart");
 

@@ -6,7 +6,7 @@ const uiSlice = createSlice({
     toast: {
       visible: false,
       message: "",
-      type: "success", // success | error | info
+      type: "success",
     },
   },
   reducers: {

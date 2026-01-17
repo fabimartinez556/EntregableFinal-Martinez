@@ -18,18 +18,16 @@ export default function OrdersScreen() {
     }
   }, [dispatch, user?.uid]);
 
-  // 🔽 Ordenar por fecha descendente
+  // 🔽 Ordenar por fecha descendente (Realtime DB → timestamp numérico)
   const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => {
-      const aDate = a.createdAt?.seconds || 0;
-      const bDate = b.createdAt?.seconds || 0;
-      return bDate - aDate;
-    });
+    return [...orders].sort(
+      (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+    );
   }, [orders]);
 
   const formatDate = (timestamp) => {
-    if (!timestamp?.seconds) return "-";
-    return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    if (!timestamp) return "-";
+    return new Date(timestamp).toLocaleString();
   };
 
   return (
@@ -52,6 +50,7 @@ export default function OrdersScreen() {
         }
         renderItem={({ item }) => {
           const total = Number(item.total) || 0;
+
           const products = Array.isArray(item.items)
             ? item.items.reduce(
                 (acc, p) => acc + (Number(p.quantity) || 0),
@@ -65,6 +64,24 @@ export default function OrdersScreen() {
               <Text>Fecha: {formatDate(item.createdAt)}</Text>
               <Text>Total: ${total}</Text>
               <Text>Productos: {products}</Text>
+
+              {/* 📍 UBICACIÓN */}
+              {item.location && (
+                <View style={styles.location}>
+                  <Text style={styles.subtitle}>Entrega</Text>
+                  <Text>{item.location.address}</Text>
+                  <Text>
+                    ({item.location.latitude}, {item.location.longitude})
+                  </Text>
+                </View>
+              )}
+
+              {/* 📦 ESTADO */}
+              {item.status && (
+                <Text style={styles.status}>
+                  Estado: {item.status.toUpperCase()}
+                </Text>
+              )}
             </View>
           );
         }}
@@ -89,5 +106,16 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: "bold",
+  },
+  location: {
+    marginTop: 8,
+  },
+  subtitle: {
+    fontWeight: "bold",
+  },
+  status: {
+    marginTop: 6,
+    fontWeight: "bold",
+    color: "green",
   },
 });

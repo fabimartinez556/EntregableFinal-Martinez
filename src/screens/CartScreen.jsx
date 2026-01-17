@@ -15,6 +15,8 @@ import ConfirmModal from "../components/ConfirmModal";
 import { removeFromCart } from "../store/cartSlice";
 import { saveCart } from "../store/cartThunks";
 import { createOrder } from "../store/ordersThunks";
+import { getCurrentLocation } from "../services/LocationService";
+
 
 export default function CartScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -27,7 +29,7 @@ export default function CartScreen({ navigation }) {
 
   const total = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
-    0
+    0,
   );
 
   const handleRemove = (id) => {
@@ -42,19 +44,26 @@ export default function CartScreen({ navigation }) {
     setSelectedItem(null);
     setModalVisible(false);
   };
+  const handleCheckout = async () => {
+  if (!user) {
+    Alert.alert("Error", "Debés estar logueado");
+    return;
+  }
 
-  const handleCheckout = () => {
-    if (!user) {
-      Alert.alert("Error", "Debés estar logueado");
-      return;
-    }
+  try {
+    // 1️⃣ Obtener ubicación del dispositivo
+    const location = await getCurrentLocation();
 
+    // 2️⃣ Crear orden con ubicación incluida
     dispatch(
-      createOrder(cartItems, total, user, () => {
+      createOrder(cartItems, total, user, location, () => {
         navigation.navigate("Orders");
       })
     );
-  };
+  } catch (error) {
+    Alert.alert("Ubicación requerida", error.message);
+  }
+};
 
   return (
     <ScreenContainer>
@@ -105,9 +114,7 @@ export default function CartScreen({ navigation }) {
         visible={modalVisible}
         title="Eliminar producto"
         message={
-          selectedItem
-            ? `¿Eliminar ${selectedItem.title} del carrito?`
-            : ""
+          selectedItem ? `¿Eliminar ${selectedItem.title} del carrito?` : ""
         }
         onConfirm={confirmRemove}
         onCancel={() => {
