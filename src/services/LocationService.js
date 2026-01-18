@@ -1,26 +1,22 @@
 import * as Location from "expo-location";
+import { GOOGLE_MAPS_API_KEY } from "../config/googleMaps";
 
-export const getCurrentLocation = async () => {
+export const getUserLocationWithMap = async () => {
   const { status } = await Location.requestForegroundPermissionsAsync();
 
   if (status !== "granted") {
     throw new Error("Permiso de ubicación denegado");
   }
 
-  const location = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.High,
-  });
+  const location = await Location.getCurrentPositionAsync({});
 
-  const [address] = await Location.reverseGeocodeAsync({
-    latitude: location.coords.latitude,
-    longitude: location.coords.longitude,
-  });
+  const { latitude, longitude } = location.coords;
+
+  const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=15&size=600x300&markers=color:red%7C${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
 
   return {
-    latitude: location.coords.latitude,
-    longitude: location.coords.longitude,
-    address: address
-      ? `${address.street || ""} ${address.name || ""}, ${address.city || ""}`
-      : "Dirección no disponible",
+    latitude,
+    longitude,
+    mapUrl: staticMapUrl,
   };
 };

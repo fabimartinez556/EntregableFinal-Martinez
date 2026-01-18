@@ -142,8 +142,13 @@ src/
 │
 ├── services/
 │   └── LocationService.js
+├── config/
+│   └── googleMaps.js
 
 ---
+
+
+
 
 ▶️ Cómo correr el proyecto
 

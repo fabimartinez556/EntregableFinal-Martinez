@@ -16,7 +16,7 @@ import { removeFromCart } from "../store/cartSlice";
 import { saveCart } from "../store/cartThunks";
 import { createOrder } from "../store/ordersThunks";
 import { getCurrentLocation } from "../services/LocationService";
-
+import { getUserLocationWithMap } from "../services/LocationService";
 
 export default function CartScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -51,10 +51,8 @@ export default function CartScreen({ navigation }) {
   }
 
   try {
-    // 1️⃣ Obtener ubicación del dispositivo
-    const location = await getCurrentLocation();
+    const location = await getUserLocationWithMap();
 
-    // 2️⃣ Crear orden con ubicación incluida
     dispatch(
       createOrder(cartItems, total, user, location, () => {
         navigation.navigate("Orders");
@@ -64,6 +62,7 @@ export default function CartScreen({ navigation }) {
     Alert.alert("Ubicación requerida", error.message);
   }
 };
+
 
   return (
     <ScreenContainer>

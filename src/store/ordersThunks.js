@@ -1,7 +1,4 @@
-import {
-  doc,
-  runTransaction,
-} from "firebase/firestore";
+import { doc, runTransaction } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db, realtimeDb } from "../firebase/firebaseConfig";
 import {
@@ -14,6 +11,7 @@ import { clearCart } from "./cartSlice";
 import { fetchProducts } from "./productsThunks";
 import { showToast } from "./uiSlice";
 import { ref, push, set, get } from "firebase/database";
+import { GOOGLE_MAPS_API_KEY } from "../config/googleMaps";
 
 /* =======================
    FETCH ORDERS (REALTIME DB)
@@ -52,56 +50,51 @@ export const createOrder = (items, total, user, location, onComplete) => {
     try {
       dispatch(setOrdersLoading());
 
-      // 🔒 TRANSACTION: validar y descontar stock
+      /* 🔒 VALIDAR Y DESCONTAR STOCK */
       await runTransaction(db, async (transaction) => {
-        const productsData = [];
-
-        // 1️⃣ TODAS LAS LECTURAS
         for (const item of items) {
           const productRef = doc(db, "productos", item.id);
-          const productSnap = await transaction.get(productRef);
+          const snap = await transaction.get(productRef);
 
-          if (!productSnap.exists()) {
+          if (!snap.exists()) {
             throw new Error("Producto inexistente");
           }
 
-          const currentStock = productSnap.data().stock;
-
-          if (currentStock < item.quantity) {
+          const stock = snap.data().stock;
+          if (stock < item.quantity) {
             throw new Error(`Stock insuficiente de ${item.title}`);
           }
 
-          productsData.push({
-            ref: productRef,
-            newStock: currentStock - item.quantity,
-          });
-        }
-
-        // 2️⃣ TODAS LAS ESCRITURAS
-        for (const product of productsData) {
-          transaction.update(product.ref, {
-            stock: product.newStock,
+          transaction.update(productRef, {
+            stock: stock - item.quantity,
           });
         }
       });
 
-      // 🧾 CREAR ORDEN EN REALTIME DATABASE
+      /* 🗺️ MAPA ESTÁTICO GOOGLE */
+      const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${location.latitude},${location.longitude}&zoom=15&size=600x300&markers=color:red%7C${location.latitude},${location.longitude}&key=${GOOGLE_MAPS_API_KEY}`;
+
+      /* 🧾 CREAR ORDEN */
       const orderRef = push(ref(realtimeDb, `orders/${user.uid}`));
 
       await set(orderRef, {
         items,
         total,
         email: user.email,
-        location,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          mapUrl,
+        },
         status: "pendiente",
         createdAt: Date.now(),
       });
 
-      // 🧼 Vaciar carrito
+      /* 🧼 LIMPIEZA */
       dispatch(clearCart());
       await AsyncStorage.removeItem("@cart");
 
-      // 🔄 Refrescar datos
+      /* 🔄 REFRESH */
       dispatch(fetchProducts());
       dispatch(fetchOrders(user.uid));
 
@@ -113,11 +106,9 @@ export const createOrder = (items, total, user, location, onComplete) => {
       );
 
       dispatch(setOrdersFinished());
-
-      if (onComplete) onComplete();
+      onComplete?.();
     } catch (error) {
       dispatch(setOrdersError(error.message));
-
       dispatch(
         showToast({
           message: error.message || "Error al confirmar compra",
