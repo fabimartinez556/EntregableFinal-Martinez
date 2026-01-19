@@ -34,12 +34,12 @@ export async function clearProductsCache() {
 export async function saveOrdersCache(userId, orders) {
   const now = Date.now();
   const list = Array.isArray(orders) ? orders : [];
-  localStorage.setItem(O_KEY(userId), JSON.stringify({ now, list }));
+  localStorage.setItem(O_KEY(String(userId)), JSON.stringify({ now, list }));
 }
 
 export async function readOrdersCache(userId, limit = 50) {
   try {
-    const raw = localStorage.getItem(O_KEY(userId));
+    const raw = localStorage.getItem(O_KEY(String(userId)));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     const list = Array.isArray(parsed?.list) ? parsed.list : [];
@@ -50,5 +50,5 @@ export async function readOrdersCache(userId, limit = 50) {
 }
 
 export async function clearOrdersCache(userId) {
-  localStorage.removeItem(O_KEY(userId));
+  localStorage.removeItem(O_KEY(String(userId)));
 }

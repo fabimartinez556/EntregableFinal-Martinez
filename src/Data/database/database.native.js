@@ -97,5 +97,7 @@ export async function readOrdersCache(userId, limit = 50) {
 
 export async function clearOrdersCache(userId) {
   const db = await getDb();
-  await db.runAsync(`DELETE FROM orders_cache WHERE userId = ?`, [String(userId)]);
+  await db.runAsync(`DELETE FROM orders_cache WHERE userId = ?`, [
+    String(userId),
+  ]);
 }

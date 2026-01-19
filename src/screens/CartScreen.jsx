@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Pressable,
 } from "react-native";
 import { useState, useMemo, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -18,6 +17,9 @@ import { removeFromCartAndPersist } from "../store/cartThunks";
 import { createOrder } from "../store/ordersThunks";
 import { getUserLocationWithMapAndAddress } from "../services/LocationService";
 import { showToast } from "../store/uiSlice";
+import EmptyState from "../components/EmptyState";
+import Price from "../components/Price";
+import Segmented from "../components/Segmented";
 
 export default function CartScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -32,21 +34,18 @@ export default function CartScreen({ navigation }) {
   const [shippingMethod, setShippingMethod] = useState("delivery");
 
   const total = useMemo(() => {
-    return cartItems.reduce((sum, item) => {
-      const price = Number(item.price) || 0;
-      const qty = Number(item.quantity) || 0;
+    const arr = Array.isArray(cartItems) ? cartItems : [];
+    return arr.reduce((sum, item) => {
+      const price = Number(item?.price) || 0;
+      const qty = Number(item?.quantity) || 0;
       return sum + price * qty;
     }, 0);
   }, [cartItems]);
 
-  // Resumen envío (mismo cálculo que en ordersThunks para que coincida)
-  const shippingPreview = useMemo(() => {
-    if (shippingMethod === "pickup") {
-      return { method: "pickup", fee: 0, etaMinutes: null, label: "Retiro en sucursal" };
-    }
-    const fee = total >= 30000 ? 0 : 2500;
-    return { method: "delivery", fee, etaMinutes: 45, label: "Delivery" };
-  }, [shippingMethod, total]);
+  const itemsCount = useMemo(() => {
+    const arr = Array.isArray(cartItems) ? cartItems : [];
+    return arr.reduce((acc, it) => acc + (Number(it?.quantity) || 0), 0);
+  }, [cartItems]);
 
   const handleRemove = useCallback(
     (id) => {
@@ -68,8 +67,7 @@ export default function CartScreen({ navigation }) {
       Alert.alert("Error", "Debés estar logueado");
       return;
     }
-
-    if (cartItems.length === 0) {
+    if (!Array.isArray(cartItems) || cartItems.length === 0) {
       Alert.alert("Carrito vacío", "Agregá productos antes de comprar");
       return;
     }
@@ -96,6 +94,65 @@ export default function CartScreen({ navigation }) {
     );
   };
 
+  const renderItem = useCallback(
+    ({ item }) => (
+      <View style={styles.item}>
+        <View style={styles.itemTop}>
+          <Text style={styles.title} numberOfLines={1}>
+            {item?.title}
+          </Text>
+          <Price value={item?.price} style={styles.price} />
+        </View>
+
+        <View style={styles.itemBottom}>
+          <Text style={styles.muted}>Cantidad: {item?.quantity}</Text>
+          <Button
+            title="Eliminar"
+            onPress={() => {
+              setSelectedItem(item);
+              setModalVisible(true);
+            }}
+            disabled={ordersLoading}
+          />
+        </View>
+      </View>
+    ),
+    [ordersLoading]
+  );
+
+  const footer = useMemo(() => {
+    if (!cartItems?.length) return null;
+
+    const fee =
+      shippingMethod === "pickup" ? 0 : Number(total) >= 30000 ? 0 : 2500;
+
+    const grandTotal = Number(total) + Number(fee);
+
+    return (
+      <View style={styles.summary}>
+        <View style={styles.summaryRow}>
+          <Text style={styles.muted}>Items</Text>
+          <Text style={styles.bold}>{itemsCount}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.muted}>Subtotal</Text>
+          <Price value={total} style={styles.bold} />
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.muted}>
+            Envío ({shippingMethod === "pickup" ? "Retiro" : "Delivery"})
+          </Text>
+          <Price value={fee} style={styles.bold} />
+        </View>
+
+        <View style={[styles.summaryRow, styles.summaryTotal]}>
+          <Text style={styles.totalText}>Total</Text>
+          <Price value={grandTotal} style={styles.totalText} />
+        </View>
+      </View>
+    );
+  }, [cartItems?.length, itemsCount, shippingMethod, total]);
+
   return (
     <ScreenContainer>
       <Header title="Carrito" />
@@ -107,100 +164,39 @@ export default function CartScreen({ navigation }) {
         </View>
       )}
 
-      {cartItems.length === 0 && !ordersLoading ? (
-        <Text style={styles.empty}>Carrito vacío</Text>
+      {!cartItems?.length && !ordersLoading ? (
+        <EmptyState
+          title="Carrito vacío"
+          subtitle="Agregá productos desde la pantalla de Productos."
+        />
       ) : (
         <>
-          <View style={styles.shippingRow}>
-            <Pressable
-              onPress={() => setShippingMethod("delivery")}
-              style={[
-                styles.pill,
-                shippingMethod === "delivery" && styles.pillActive,
-              ]}
-              disabled={ordersLoading}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  shippingMethod === "delivery" && styles.pillTextActive,
-                ]}
-              >
-                Delivery
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setShippingMethod("pickup")}
-              style={[
-                styles.pill,
-                shippingMethod === "pickup" && styles.pillActive,
-              ]}
-              disabled={ordersLoading}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  shippingMethod === "pickup" && styles.pillTextActive,
-                ]}
-              >
-                Retiro
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.shippingBox}>
-            <Text style={styles.shippingTitle}>Envío</Text>
-            <Text>Método: {shippingPreview.label}</Text>
-            <Text>Costo: ${shippingPreview.fee}</Text>
-            {shippingPreview.etaMinutes != null && (
-              <Text>ETA: {shippingPreview.etaMinutes} min</Text>
-            )}
-            {shippingMethod === "pickup" && (
-              <Text style={styles.shippingNote}>
-                Retiro: se guarda sin ubicación.
-              </Text>
-            )}
-            {shippingMethod === "delivery" && (
-              <Text style={styles.shippingNote}>
-                Delivery: se solicitará tu ubicación al confirmar.
-              </Text>
-            )}
-          </View>
+          <Segmented
+            value={shippingMethod}
+            onChange={setShippingMethod}
+            options={[
+              { label: "Delivery", value: "delivery" },
+              { label: "Retiro", value: "pickup" },
+            ]}
+          />
 
           <FlatList
             data={cartItems}
-            keyExtractor={(item) => String(item.id)}
+            keyExtractor={(item) => String(item?.id)}
             initialNumToRender={10}
             windowSize={7}
             removeClippedSubviews
-            renderItem={({ item }) => (
-              <View style={styles.item}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text>Cantidad: {item.quantity}</Text>
-                <Text>Precio: ${item.price}</Text>
-                <Button
-                  title="Eliminar"
-                  onPress={() => {
-                    setSelectedItem(item);
-                    setModalVisible(true);
-                  }}
-                  disabled={ordersLoading}
-                />
-              </View>
-            )}
-            ListFooterComponent={
-              cartItems.length > 0 ? (
-                <Text style={styles.total}>Total: ${total}</Text>
-              ) : null
-            }
+            renderItem={renderItem}
+            ListFooterComponent={footer}
           />
 
-          <Button
-            title={ordersLoading ? "Procesando..." : "Finalizar compra"}
-            onPress={handleCheckout}
-            disabled={ordersLoading}
-          />
+          <View style={styles.checkout}>
+            <Button
+              title={ordersLoading ? "Procesando..." : "Finalizar compra"}
+              onPress={handleCheckout}
+              disabled={ordersLoading}
+            />
+          </View>
         </>
       )}
 
@@ -219,73 +215,64 @@ export default function CartScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  empty: {
-    textAlign: "center",
-    marginTop: 40,
-    fontSize: 16,
-  },
-  shippingRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#fff",
-  },
-  pillActive: {
-    borderColor: "#111",
-  },
-  pillText: {
-    fontWeight: "700",
-    fontSize: 12,
-    color: "#333",
-  },
-  pillTextActive: {
-    color: "#111",
-  },
-  shippingBox: {
-    marginHorizontal: 10,
-    marginBottom: 6,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 10,
-    backgroundColor: "#fff",
-  },
-  shippingTitle: {
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  shippingNote: {
-    marginTop: 6,
-    color: "#666",
-    fontSize: 12,
-  },
-  item: {
-    borderBottomWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-  },
-  title: {
-    fontWeight: "bold",
-  },
-  total: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginVertical: 20,
-    textAlign: "center",
-  },
   loader: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(255,255,255,0.8)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 10,
+  },
+  item: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  itemTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  itemBottom: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  title: {
+    flex: 1,
+    fontWeight: "800",
+  },
+  price: {
+    fontWeight: "800",
+  },
+  muted: {
+    color: "#666",
+  },
+  bold: {
+    fontWeight: "800",
+  },
+  summary: {
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  summaryTotal: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
+  totalText: {
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  checkout: {
+    padding: 10,
   },
 });

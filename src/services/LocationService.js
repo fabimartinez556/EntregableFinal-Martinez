@@ -26,19 +26,14 @@ function webGeoErrorMessage(err) {
   if (code === 1) return "Ubicación bloqueada por el navegador (permití Ubicación).";
   if (code === 2) return "No se pudo determinar la ubicación (signal/GPS no disponible).";
   if (code === 3) return "Tiempo de espera agotado obteniendo ubicación.";
-
   return err?.message || "No se pudo obtener ubicación.";
 }
 
 async function getWebCoords() {
-  // en web, geolocation requiere contexto seguro:
-  // localhost OK; en IP/host puede fallar si no es https.
   return new Promise((resolve, reject) => {
     if (!globalThis?.navigator?.geolocation) {
       reject(
-        new Error(
-          "Geolocalización no disponible en este navegador (usá localhost/https)."
-        )
+        new Error("Geolocalización no disponible en este navegador (usá localhost/https).")
       );
       return;
     }
@@ -80,13 +75,7 @@ export const getUserLocationWithMapAndAddress = async () => {
     const places = await Location.reverseGeocodeAsync({ latitude, longitude });
     const a = places?.[0];
     if (a) {
-      const parts = [
-        a.street,
-        a.streetNumber,
-        a.city,
-        a.region,
-        a.country,
-      ].filter(Boolean);
+      const parts = [a.street, a.streetNumber, a.city, a.region, a.country].filter(Boolean);
       addressText = parts.length ? parts.join(" ") : null;
     }
   } catch {}

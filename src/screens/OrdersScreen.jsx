@@ -15,6 +15,8 @@ import { useDispatch, useSelector } from "react-redux";
 import ScreenContainer from "../components/ScreenContainer";
 import Header from "../components/Header";
 import { fetchOrders } from "../store/ordersThunks";
+import EmptyState from "../components/EmptyState";
+import Price from "../components/Price";
 
 export default function OrdersScreen() {
   const dispatch = useDispatch();
@@ -26,7 +28,6 @@ export default function OrdersScreen() {
   const [mapErrors, setMapErrors] = useState({});
 
   useEffect(() => {
-    // reset map errors when user changes (evita “quedó roto” entre cuentas)
     setMapErrors({});
     if (user?.uid) dispatch(fetchOrders(user.uid));
   }, [dispatch, user?.uid]);
@@ -37,19 +38,20 @@ export default function OrdersScreen() {
 
   const sortedOrders = useMemo(() => {
     const arr = Array.isArray(orders) ? orders : [];
-    return [...arr].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    return [...arr].sort((a, b) => (b?.createdAt ?? 0) - (a?.createdAt ?? 0));
   }, [orders]);
 
-  const formatDate = (timestamp) => {
+  const formatDate = useCallback((timestamp) => {
     if (!timestamp) return "-";
     try {
-      return new Date(timestamp).toLocaleString();
+      // deja consistente en AR
+      return new Date(timestamp).toLocaleString("es-AR");
     } catch {
       return "-";
     }
-  };
+  }, []);
 
-  const openMaps = async (lat, lng) => {
+  const openMaps = useCallback(async (lat, lng) => {
     const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     try {
       const supported = await Linking.canOpenURL(url);
@@ -61,45 +63,65 @@ export default function OrdersScreen() {
     } catch (err) {
       Alert.alert("Error", err?.message || "No se pudo abrir Maps");
     }
-  };
+  }, []);
 
-  const renderStatusChip = (status) => {
+  const renderStatusChip = useCallback((status) => {
     const s = String(status || "").toLowerCase();
     const label = s ? s.toUpperCase() : "SIN ESTADO";
     const ok = s === "entregado";
+
     return (
       <View style={[styles.chip, ok ? styles.chipOk : styles.chipPending]}>
         <Text style={styles.chipText}>{label}</Text>
       </View>
     );
-  };
+  }, []);
 
-  const renderTimeline = (history = []) => {
-    if (!Array.isArray(history) || history.length === 0) return null;
-
-    const items = [...history].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  const renderMethodBadge = useCallback((method) => {
+    const m = method === "pickup" ? "pickup" : "delivery";
+    const label = m === "pickup" ? "RETIRO" : "DELIVERY";
 
     return (
-      <View style={styles.timeline}>
-        <Text style={styles.subtitle}>Seguimiento</Text>
-
-        {items.map((h, idx) => (
-          <View
-            key={`${String(h.status || "status")}-${String(h.at || idx)}`}
-            style={styles.timelineRow}
-          >
-            <View style={styles.dot} />
-            <View style={styles.timelineText}>
-              <Text style={styles.timelineStatus}>
-                {String(h.status || "estado").toUpperCase()}
-              </Text>
-              <Text style={styles.timelineDate}>{formatDate(h.at)}</Text>
-            </View>
-          </View>
-        ))}
+      <View
+        style={[
+          styles.methodBadge,
+          m === "pickup" ? styles.methodPickup : styles.methodDelivery,
+        ]}
+      >
+        <Text style={styles.methodText}>{label}</Text>
       </View>
     );
-  };
+  }, []);
+
+  const renderTimeline = useCallback(
+    (history = []) => {
+      if (!Array.isArray(history) || history.length === 0) return null;
+
+      const items = [...history].sort((a, b) => (a?.at ?? 0) - (b?.at ?? 0));
+
+      return (
+        <View style={styles.timeline}>
+          <Text style={styles.subtitle}>Seguimiento</Text>
+
+          {items.map((h, idx) => (
+            <View
+              key={`${String(h?.status || "status")}-${String(h?.at || idx)}`}
+              style={styles.timelineRow}
+            >
+              <View style={styles.dot} />
+              <View style={styles.timelineText}>
+                <Text style={styles.timelineStatus}>
+                  {String(h?.status || "estado").toUpperCase()}
+                </Text>
+                <Text style={styles.timelineDate}>{formatDate(h?.at)}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    },
+    [formatDate]
+  );
 
   const renderItem = useCallback(
     ({ item }) => {
@@ -109,6 +131,7 @@ export default function OrdersScreen() {
         ? item.items.reduce((acc, p) => acc + (Number(p?.quantity) || 0), 0)
         : 0;
 
+      // compat: si falta shipping en órdenes viejas, asumimos delivery
       const shipping = item?.shipping || null;
       const method = shipping?.method === "pickup" ? "pickup" : "delivery";
 
@@ -126,42 +149,83 @@ export default function OrdersScreen() {
           ? Number(shipping.etaMinutes)
           : null;
 
-      const lat = item?.location?.latitude ?? null;
-      const lng = item?.location?.longitude ?? null;
+      // ✅ Si es retiro, NO mostramos ubicación/mapa aunque exista en datos
+      const showLocation = method === "delivery";
+
+      const lat =
+        showLocation && item?.location?.latitude != null
+          ? item.location.latitude
+          : null;
+
+      const lng =
+        showLocation && item?.location?.longitude != null
+          ? item.location.longitude
+          : null;
 
       const showShippingBlock = Boolean(shipping) || Boolean(item?.addressText);
 
       return (
         <View style={styles.card}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.bold}>Orden #{item?.id}</Text>
-            {renderStatusChip(item?.status)}
+          <View style={styles.topRow}>
+            <View style={styles.leftTop}>
+              <Text style={styles.bold} numberOfLines={1}>
+                Orden #{item?.id}
+              </Text>
+              {renderMethodBadge(method)}
+            </View>
+
+            <View style={styles.rightTop}>{renderStatusChip(item?.status)}</View>
           </View>
 
-          <Text>Fecha: {formatDate(item?.createdAt)}</Text>
-          <Text>Total: ${total}</Text>
-          <Text>Productos: {productsCount}</Text>
+          <Text style={styles.meta}>Fecha: {formatDate(item?.createdAt)}</Text>
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryLabel}>Total</Text>
+              <Price value={total} style={styles.summaryValue} />
+            </View>
+
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryLabel}>Productos</Text>
+              <Text style={styles.summaryValueText}>{productsCount}</Text>
+            </View>
+
+            <View style={styles.summaryBox}>
+              <Text style={styles.summaryLabel}>Costo envío</Text>
+              {fee != null && !Number.isNaN(fee) ? (
+                <Price value={fee} style={styles.summaryValue} />
+              ) : (
+                <Text style={styles.summaryValueText}>-</Text>
+              )}
+            </View>
+          </View>
 
           {showShippingBlock && (
             <View style={styles.block}>
               <Text style={styles.subtitle}>Envío</Text>
-
               <Text>Método: {method === "pickup" ? "Retiro" : "Delivery"}</Text>
 
-              {fee != null && !Number.isNaN(fee) && <Text>Costo: ${fee}</Text>}
+              {method === "delivery" &&
+                eta != null &&
+                !Number.isNaN(eta) &&
+                eta > 0 && <Text>ETA: {eta} min</Text>}
 
-              {eta != null && !Number.isNaN(eta) && eta > 0 && (
-                <Text>ETA: {eta} min</Text>
+              {method === "delivery" && !!item?.addressText && (
+                <Text>Dirección: {item.addressText}</Text>
               )}
 
-              {!!item?.addressText && <Text>Dirección: {item.addressText}</Text>}
+              {method === "pickup" && (
+                <Text style={styles.pickupHint}>
+                  Retiro en punto de entrega (sin ubicación).
+                </Text>
+              )}
             </View>
           )}
 
           {lat != null && lng != null && (
             <View style={styles.block}>
               <Text style={styles.subtitle}>Ubicación</Text>
-              <Text>
+              <Text style={styles.coords}>
                 ({lat}, {lng})
               </Text>
 
@@ -191,8 +255,17 @@ export default function OrdersScreen() {
         </View>
       );
     },
-    [mapErrors]
+    [
+      formatDate,
+      mapErrors,
+      openMaps,
+      renderMethodBadge,
+      renderStatusChip,
+      renderTimeline,
+    ]
   );
+
+  const showEmpty = !loading && sortedOrders.length === 0;
 
   return (
     <ScreenContainer>
@@ -201,25 +274,27 @@ export default function OrdersScreen() {
       {loading && sortedOrders.length === 0 && (
         <Text style={styles.center}>Cargando...</Text>
       )}
-      {!!error && <Text style={styles.center}>Error: {error}</Text>}
-      {!loading && sortedOrders.length === 0 && (
-        <Text style={styles.center}>No tenés órdenes</Text>
-      )}
 
-      <FlatList
-        data={sortedOrders}
-        keyExtractor={(item, index) => String(item?.id ?? index)}
-        contentContainerStyle={
-          sortedOrders.length === 0 && !loading ? styles.emptyList : null
-        }
-        refreshControl={
-          <RefreshControl refreshing={!!loading} onRefresh={onRefresh} />
-        }
-        initialNumToRender={8}
-        windowSize={7}
-        removeClippedSubviews
-        renderItem={renderItem}
-      />
+      {!!error && <Text style={styles.center}>Error: {error}</Text>}
+
+      {showEmpty ? (
+        <EmptyState
+          title="No tenés órdenes"
+          subtitle="Cuando confirmes una compra, van a aparecer acá."
+        />
+      ) : (
+        <FlatList
+          data={sortedOrders}
+          keyExtractor={(item, index) => String(item?.id ?? index)}
+          refreshControl={
+            <RefreshControl refreshing={!!loading} onRefresh={onRefresh} />
+          }
+          initialNumToRender={8}
+          windowSize={7}
+          removeClippedSubviews
+          renderItem={renderItem}
+        />
+      )}
     </ScreenContainer>
   );
 }
@@ -230,33 +305,107 @@ const styles = StyleSheet.create({
     marginTop: 40,
     fontSize: 16,
   },
-  emptyList: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
+
   card: {
     borderBottomWidth: 1,
     borderBottomColor: "#ddd",
     paddingVertical: 12,
     paddingHorizontal: 10,
   },
-  rowBetween: {
+
+  topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
+    alignItems: "flex-start",
+    marginBottom: 6,
+    gap: 10,
   },
+  leftTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    flex: 1,
+  },
+  rightTop: {
+    alignItems: "flex-end",
+  },
+
   bold: {
     fontWeight: "bold",
     fontSize: 16,
   },
-  block: {
+  meta: {
+    color: "#444",
+  },
+
+  methodBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  methodDelivery: {
+    borderColor: "#111",
+    backgroundColor: "#fff",
+  },
+  methodPickup: {
+    borderColor: "#0f766e",
+    backgroundColor: "#e6fffb",
+  },
+  methodText: {
+    fontWeight: "800",
+    fontSize: 12,
+    letterSpacing: 0.4,
+  },
+
+  summaryRow: {
+    flexDirection: "row",
+    gap: 10,
     marginTop: 10,
+  },
+  summaryBox: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: "#fff",
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+    fontWeight: "700",
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#111",
+  },
+  summaryValueText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#111",
+  },
+
+  block: {
+    marginTop: 12,
   },
   subtitle: {
     fontWeight: "bold",
     marginBottom: 2,
   },
+  pickupHint: {
+    marginTop: 4,
+    color: "#555",
+  },
+
+  coords: {
+    color: "#555",
+  },
+
   map: {
     width: "100%",
     height: 140,
@@ -272,6 +421,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#555",
   },
+
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -287,6 +437,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 12,
   },
+
   timeline: {
     marginTop: 12,
     borderTopWidth: 1,

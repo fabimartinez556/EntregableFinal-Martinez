@@ -1,8 +1,9 @@
 import { Platform } from "react-native";
 
-const impl = Platform.OS === "web"
-  ? require("./database.web")
-  : require("./database.native");
+const impl =
+  Platform.OS === "web"
+    ? require("./database.web")
+    : require("./database.native");
 
 export const getDb = impl.getDb;
 export const initDb = impl.initDb;

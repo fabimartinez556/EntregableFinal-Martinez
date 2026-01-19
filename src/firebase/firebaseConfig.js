@@ -8,7 +8,7 @@ import {
   initializeAuth,
   getReactNativePersistence,
 } from "firebase/auth";
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDGdeZyGyRnYE_mYRMcrJcypGJBOo5Ooyg",
@@ -20,15 +20,14 @@ const firebaseConfig = {
   databaseURL: "https://react-app-8a129-default-rtdb.firebaseio.com",
 };
 
-// evita duplicate-app en HMR
+// evita duplicate-app con HMR
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ✅ Auth: web normal, native con persistencia real
 export const auth =
   Platform.OS === "web"
     ? getAuth(app)
     : initializeAuth(app, {
-        persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+        persistence: getReactNativePersistence(AsyncStorage),
       });
 
 export const db = getFirestore(app);
