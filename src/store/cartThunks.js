@@ -2,26 +2,33 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setCart, addToCart, removeFromCart, clearCart } from "./cartSlice";
 
-const CART_KEY = "@cart";
+const CART_KEY = (uid) => `@cart:${uid || "guest"}`;
 
-const persist = async (items) => {
-  await AsyncStorage.setItem(CART_KEY, JSON.stringify(items));
+const persist = async (key, items) => {
+  await AsyncStorage.setItem(key, JSON.stringify(items));
 };
 
-export const loadCart = () => async (dispatch) => {
+export const loadCart = (uid) => async (dispatch) => {
   try {
-    const stored = await AsyncStorage.getItem(CART_KEY);
-    dispatch(setCart(stored ? JSON.parse(stored) : []));
+    const key = CART_KEY(uid);
+    const stored = await AsyncStorage.getItem(key);
+    if (stored) dispatch(setCart(JSON.parse(stored)));
+    else dispatch(setCart([]));
   } catch (e) {
     console.log("Error cargando carrito", e);
+    dispatch(setCart([]));
   }
 };
 
 export const addToCartAndPersist = (product) => async (dispatch, getState) => {
   try {
-     dispatch(addToCart({ ...product, id: product?.id != null ? String(product.id) : product?.id }));
+    const uid = getState().auth.user?.uid || null;
+    const key = CART_KEY(uid);
+
+    dispatch(addToCart(product));
     const items = getState().cart.items;
-    await persist(items);
+
+    await persist(key, items);
   } catch (e) {
     console.log("Error guardando carrito", e);
   }
@@ -29,19 +36,31 @@ export const addToCartAndPersist = (product) => async (dispatch, getState) => {
 
 export const removeFromCartAndPersist = (id) => async (dispatch, getState) => {
   try {
+    const uid = getState().auth.user?.uid || null;
+    const key = CART_KEY(uid);
+
     dispatch(removeFromCart(id));
     const items = getState().cart.items;
-    await persist(items);
+
+    await persist(key, items);
   } catch (e) {
     console.log("Error guardando carrito", e);
   }
 };
 
-export const clearCartAndPersist = () => async (dispatch) => {
+export const clearCartAndPersist = () => async (dispatch, getState) => {
   try {
+    const uid = getState().auth.user?.uid || null;
+    const key = CART_KEY(uid);
+
     dispatch(clearCart());
-    await persist([]);
+    await persist(key, []);
   } catch (e) {
     console.log("Error guardando carrito", e);
   }
+};
+
+// opcional: al desloguear, limpiar carrito en memoria (no borra el storage)
+export const clearCartOnly = () => (dispatch) => {
+  dispatch(clearCart());
 };

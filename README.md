@@ -1,44 +1,40 @@
-🛒 App E-commerce React Native + Firebase
+App E-commerce React Native + Firebase (Expo)
 
-Aplicación mobile de e-commerce desarrollada con React Native, Redux Toolkit y Firebase.
-Permite a los usuarios autenticarse, navegar productos, gestionar un carrito, realizar compras con control de stock en tiempo real y visualizar sus órdenes asociadas a una ubicación geográfica.
+Aplicación móvil tipo e-commerce desarrollada con React Native (Expo), Redux Toolkit y Firebase.
+Permite autenticación, listado de productos, carrito con persistencia, creación de órdenes con control de stock en tiempo real y registro de ubicación (Location) en cada compra (modo delivery).
 
-🚀 Tecnologías usadas
+🚀 Tecnologías
 
-React Native (Expo)
+Expo / React Native
 
-Redux Toolkit (Slices y Thunks)
+Redux Toolkit (@reduxjs/toolkit, react-redux)
 
 React Navigation
 
-Firebase
+Firebase (firebase)
 
-Authentication
+Expo Location (expo-location)
 
-Firestore
+Expo SQLite (expo-sqlite)
 
-Realtime Database
-
-AsyncStorage
-
-JavaScript (ES6+)
+AsyncStorage (@react-native-async-storage/async-storage)
 
 📦 Funcionalidades principales
 🔐 Autenticación
 
-Login con Firebase Authentication
+Login / Registro con Firebase Authentication
 
-Persistencia de sesión
+Manejo de sesión en Redux (authSlice)
 
-Navegación condicional (AuthStack / AppStack)
+Persistencia de sesión en móviles (AsyncStorage)
 
-🛍️ Productos
+🛍️ Productos (Firestore)
 
-Listado de productos desde Firestore
+Listado de productos desde colección productos
 
-Visualización de stock en tiempo real
+Visualización de stock disponible
 
-Bloqueo de compra si no hay stock
+No permite agregar al carrito si supera stock
 
 Actualización automática del stock luego de una compra
 
@@ -46,15 +42,17 @@ Actualización automática del stock luego de una compra
 
 Agregar / eliminar productos
 
-Persistencia en AsyncStorage
+Persistencia local (AsyncStorage)
 
-Cálculo automático del total
+Total calculado con useMemo
 
-Vaciado inmediato tras confirmar la compra
+Modal de confirmación al eliminar
 
-🧾 Órdenes
+Toasts (éxito/error/info)
 
-Creación de órdenes en Firebase Realtime Database
+🧾 Órdenes (Realtime DB + Firestore Transaction)
+
+Se guardan por usuario en Realtime DB: orders/{userId}
 
 Validación y descuento de stock mediante Firestore Transactions
 
@@ -62,159 +60,258 @@ Listado de órdenes por usuario autenticado
 
 Cada orden incluye:
 
-Productos comprados
+items, total, email
 
-Total
+shipping.method: delivery o pickup
 
-Email del usuario
+createdAt, status, statusHistory
 
-Ubicación geográfica con mini-mapa y coordenadas
+location + mapUrl (solo en delivery)
 
-Fecha de creación
+📍 Ubicación (Location)
 
-Estado de la orden (pendiente)
+En delivery se exige ubicación (lat/lng)
 
-Órdenes ordenadas por fecha (más recientes primero)
+Se guarda:
 
-Mapas interactivos: al tocar la miniatura se abre la ubicación en Google Maps
+coordenadas
 
-📍 Ubicación
+mapUrl (Google Static Maps)
 
-Solicitud de permisos de ubicación al usuario
+addressText (reverse geocoding best-effort)
 
-Obtención de coordenadas GPS
+En pickup no se pide ubicación
 
-Asociación de la ubicación a cada orden
+💾 Persistencia (SQLite)
 
-Reverse geocoding para mostrar dirección legible (en próximas mejoras)
+Cache local de:
 
-🔔 Experiencia de Usuario (UX)
+productos
 
-Toasts tipo e-commerce (éxito / error)
+órdenes por usuario
 
-Modal de confirmación para eliminar productos
+Implementación multiplataforma:
 
-Loader durante procesos críticos
+iOS/Android: SQLite
 
-Manejo de errores centralizado
-
-🧠 Arquitectura Redux
-
-Slices
-
-authSlice → usuario y sesión
-
-productsSlice → productos y stock
-
-cartSlice → carrito
-
-ordersSlice → órdenes
-
-uiSlice → toasts y loaders globales
-
-Thunks
-
-fetchProducts
-
-fetchOrders
-
-createOrder (con Firestore Transactions)
-
-loadCart
-
-saveCart
-
-🔒 Seguridad de stock
-
-El stock se valida y descuenta usando Firestore Transactions
-
-No permite:
-
-Stock negativo
-
-Compras simultáneas inconsistentes
-
-El stock se refresca automáticamente tras cada compra
+Web: localStorage
 
 📂 Estructura del proyecto
 src/
 ├── components/
-│   ├── Header
-│   ├── ScreenContainer
-│   ├── ConfirmModal
-│   ├── Toast
-│   └── Categories
-│
+│   ├── Header.js
+│   ├── ScreenContainer.js
+│   ├── ConfirmModal.js
+│   ├── Toast.js
+│   ├── EmptyState.js 
+│   └── Price.js
+│   └── Segmented.js             
+│             │
 ├── navigation/
-│   ├── AuthStack
-│   ├── HomeStack
-│   ├── BottomTabs
-│   └── Navigator
+│   ├── AuthStack.js
+│   ├── HomeStack.js
+│   ├── BottomTabs.js
+│   └── Navigator.js
 │
 ├── screens/
-│   ├── HomeScreen
-│   ├── CartScreen
-│   ├── OrdersScreen
-│   ├── LoginScreen
-│   └── LocationScreen
+│   ├── HomeScreen.jsx / .js
+│   ├── CartScreen.js
+│   ├── OrdersScreen.js
+│   ├── LoginScreen.js
+│   └── LocationScreen.js 
 │
 ├── store/
-│   ├── authSlice
-│   ├── authThunks
-│   ├── cartSlice
-│   ├── cartThunks
-│   ├── ordersSlice
-│   ├── ordersThunks
-│   ├── productsSlice
-│   ├── productsThunks
-│   ├── uiSlice
-│   └── store.js
+│   ├── store.js
+│   ├── authSlice.js
+│   ├── authThunks.js
+│   ├── productsSlice.js
+│   ├── productsThunks.js
+│   ├── cartSlice.js
+│   ├── cartThunks.js
+│   ├── ordersSlice.js
+│   ├── ordersThunks.js
+│   └── uiSlice.js
 │
 ├── firebase/
 │   └── firebaseConfig.js
 │
 ├── services/
 │   └── LocationService.js
-├── config/
-│   └── googleMaps.js
+│
+├── data/
+│   └── database/
+│       ├── database.js        (index/bridge por Platform)
+│       ├── database.native.js (SQLite)
+│       └── database.web.js    (localStorage)
+│
+└── config/
+    └── googleMaps.js
+
+⚙️ Configuración previa (Firebase + Google Maps)
+1) Firebase
+
+Crear un proyecto en Firebase y habilitar:
+
+Authentication → Email/Password
+
+Firestore Database
+
+Realtime Database
+
+Colección en Firestore:
+
+productos (documentos con al menos):
+
+title (string)
+
+price (number)
+
+stock (number)
+
+image (string url, opcional)
+
+category (string, opcional)
+
+Realtime Database:
+
+se usa ruta orders/{userId}/...
+
+2) Variables de configuración
+
+Editar:
+
+src/firebase/firebaseConfig.js
+
+completar apiKey, authDomain, projectId, databaseURL, etc.
+
+src/config/googleMaps.js
+
+colocar la API key:
+
+export const GOOGLE_MAPS_API_KEY = "TU_API_KEY";
+
+
+Importante:
+
+Para Static Maps y Geocoding, la API key debe tener habilitado:
+
+Maps Static API
+
+Geocoding API (opcional, solo para addressText)
 
 ▶️ Cómo correr el proyecto
 
-Instalar dependencias
+Instalar dependencias:
 
 npm install
 
 
-Iniciar Expo
+Ejecutar:
 
 npx expo start
 
 
-Configurar Firebase
+Atajos:
 
-Crear proyecto en Firebase
+Web: npx expo start --web
 
-Habilitar Authentication, Firestore y Realtime Database
+Android: npx expo start --android
 
-Copiar credenciales en firebaseConfig.js
+iOS: npx expo start --ios
 
-🧩 Próximas mejoras posibles
+📱 Permisos de ubicación
+iOS / Android
 
-Detalle de orden con lista completa de productos
+La app solicita permisos con expo-location al momento de finalizar compra en delivery.
 
-Estados de orden avanzados (pendiente / enviado / entregado)
+Si el usuario niega el permiso, no se permite finalizar la compra en delivery.
 
-Perfil de usuario y edición de datos
+Web
 
-Pasarela de pagos (Stripe / MercadoPago)
+Se usa navigator.geolocation.
+Recomendación: ejecutar en localhost o https, porque algunos navegadores bloquean geolocalización en contextos inseguros.
 
-Panel de administración para stock y productos
+🧠 Manejo de estado (Redux Toolkit)
 
-Animaciones y skeleton loaders
+Slices:
 
-Mapas dinámicos con marcadores de dirección completa
+authSlice: usuario (uid/email), loading, error
 
-✍️ Autor
+productsSlice: listado de productos, loading, error
 
-Desarrollado por Fabián Martínez
-Proyecto de práctica avanzada con foco en arquitectura limpia, UX real y manejo correcto de estado, stock y persistencia.
+cartSlice: items + quantity
+
+ordersSlice: órdenes, loading, error
+
+uiSlice: toast global
+
+Thunks principales:
+
+fetchProducts: trae productos desde Firestore (con cache)
+
+addToCartAndPersist / removeFromCartAndPersist: carrito + AsyncStorage
+
+createOrder: transacción de stock (Firestore) + guardar orden (Realtime DB)
+
+fetchOrders: trae órdenes del usuario (cache → realtime)
+
+🔒 Control de stock (Firestore Transaction)
+
+Al confirmar compra:
+
+Se leen todos los productos del carrito dentro de una transacción.
+
+Se valida stock disponible.
+
+Se actualiza stock (writes) SOLO después de completar todas las lecturas.
+
+Se crea la orden en Realtime DB.
+
+Esto evita stock negativo y conflictos por compras simultáneas.
+
+💾 Persistencia (SQLite / Web fallback)
+
+iOS/Android: expo-sqlite guarda cache local de productos/órdenes.
+
+Web: localStorage (misma API, distinta implementación).
+
+La app inicializa DB en AppContent con initDb().
+
+✅ Optimización de listas / UX
+
+FlatList con:
+
+initialNumToRender
+
+windowSize
+
+removeClippedSubviews
+
+Componentes reutilizables:
+
+Header, ScreenContainer, ConfirmModal, Toast
+
+UX:
+
+Loader durante checkout
+
+Toasts para feedback
+
+Modal de confirmación al eliminar del carrito
+
+🧪 Posibles mejoras (opcionales)
+
+Pantalla “Detalle de Orden”
+
+Estados avanzados (enviado/entregado) + panel admin
+
+Pagos (MercadoPago/Stripe)
+
+Mejorar UI con tarjetas + íconos
+
+Reglas de seguridad Firebase más estrictas (producción)
+
+👤 Autor
+
+Fabián Martínez
+Proyecto académico / práctica avanzada con foco en arquitectura, Redux Toolkit, Firebase, persistencia y permisos del dispositivo.

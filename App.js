@@ -6,7 +6,7 @@ import Navigator from "./src/navigation/Navigator";
 import { setUser, logout } from "./src/store/authSlice";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/firebase/firebaseConfig";
-import { loadCart } from "./src/store/cartThunks";
+import { loadCart, clearCartOnly } from "./src/store/cartThunks";
 import Toast from "./src/components/Toast";
 import { initDb } from "./src/data/database";
 
@@ -23,10 +23,16 @@ function AppContent() {
       dispatch(loadCart());
     })();
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) dispatch(setUser({ uid: user.uid, email: user.email }));
-      else dispatch(logout());
-    });
+const unsubscribe = onAuthStateChanged(auth, (user) => {
+  if (user) {
+    dispatch(setUser({ uid: user.uid, email: user.email }));
+    dispatch(loadCart(user.uid));     // ✅ carga carrito de ese usuario
+  } else {
+    dispatch(logout());
+    dispatch(clearCartOnly());        // ✅ limpia UI (evita que “quede” el carrito anterior)
+    dispatch(loadCart(null));         // opcional: carga carrito guest o vacío
+  }
+});
 
     return unsubscribe;
   }, [dispatch]);
