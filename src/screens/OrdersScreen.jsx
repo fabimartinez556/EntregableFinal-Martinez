@@ -19,11 +19,15 @@ import { fetchOrders } from "../store/ordersThunks";
 export default function OrdersScreen() {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
-  const { items: orders = [], loading, error } = useSelector((state) => state.orders);
+  const { items: orders = [], loading, error } = useSelector(
+    (state) => state.orders
+  );
 
   const [mapErrors, setMapErrors] = useState({});
 
   useEffect(() => {
+    // reset map errors when user changes (evita “quedó roto” entre cuentas)
+    setMapErrors({});
     if (user?.uid) dispatch(fetchOrders(user.uid));
   }, [dispatch, user?.uid]);
 
@@ -32,7 +36,8 @@ export default function OrdersScreen() {
   }, [dispatch, user?.uid]);
 
   const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    const arr = Array.isArray(orders) ? orders : [];
+    return [...arr].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
   }, [orders]);
 
   const formatDate = (timestamp) => {
@@ -61,8 +66,9 @@ export default function OrdersScreen() {
   const renderStatusChip = (status) => {
     const s = String(status || "").toLowerCase();
     const label = s ? s.toUpperCase() : "SIN ESTADO";
+    const ok = s === "entregado";
     return (
-      <View style={[styles.chip, s === "entregado" ? styles.chipOk : styles.chipPending]}>
+      <View style={[styles.chip, ok ? styles.chipOk : styles.chipPending]}>
         <Text style={styles.chipText}>{label}</Text>
       </View>
     );
@@ -76,8 +82,12 @@ export default function OrdersScreen() {
     return (
       <View style={styles.timeline}>
         <Text style={styles.subtitle}>Seguimiento</Text>
+
         {items.map((h, idx) => (
-          <View key={`${h.status || "status"}-${idx}`} style={styles.timelineRow}>
+          <View
+            key={`${String(h.status || "status")}-${String(h.at || idx)}`}
+            style={styles.timelineRow}
+          >
             <View style={styles.dot} />
             <View style={styles.timelineText}>
               <Text style={styles.timelineStatus}>
@@ -91,87 +101,124 @@ export default function OrdersScreen() {
     );
   };
 
+  const renderItem = useCallback(
+    ({ item }) => {
+      const total = Number(item?.total) || 0;
+
+      const productsCount = Array.isArray(item?.items)
+        ? item.items.reduce((acc, p) => acc + (Number(p?.quantity) || 0), 0)
+        : 0;
+
+      const shipping = item?.shipping || null;
+      const method = shipping?.method === "pickup" ? "pickup" : "delivery";
+
+      const fee =
+        method === "pickup"
+          ? 0
+          : shipping?.fee != null
+          ? Number(shipping.fee)
+          : null;
+
+      const eta =
+        method === "pickup"
+          ? null
+          : shipping?.etaMinutes != null
+          ? Number(shipping.etaMinutes)
+          : null;
+
+      const lat = item?.location?.latitude ?? null;
+      const lng = item?.location?.longitude ?? null;
+
+      const showShippingBlock = Boolean(shipping) || Boolean(item?.addressText);
+
+      return (
+        <View style={styles.card}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.bold}>Orden #{item?.id}</Text>
+            {renderStatusChip(item?.status)}
+          </View>
+
+          <Text>Fecha: {formatDate(item?.createdAt)}</Text>
+          <Text>Total: ${total}</Text>
+          <Text>Productos: {productsCount}</Text>
+
+          {showShippingBlock && (
+            <View style={styles.block}>
+              <Text style={styles.subtitle}>Envío</Text>
+
+              <Text>Método: {method === "pickup" ? "Retiro" : "Delivery"}</Text>
+
+              {fee != null && !Number.isNaN(fee) && <Text>Costo: ${fee}</Text>}
+
+              {eta != null && !Number.isNaN(eta) && eta > 0 && (
+                <Text>ETA: {eta} min</Text>
+              )}
+
+              {!!item?.addressText && <Text>Dirección: {item.addressText}</Text>}
+            </View>
+          )}
+
+          {lat != null && lng != null && (
+            <View style={styles.block}>
+              <Text style={styles.subtitle}>Ubicación</Text>
+              <Text>
+                ({lat}, {lng})
+              </Text>
+
+              {item?.location?.mapUrl && !mapErrors[item.id] ? (
+                <TouchableOpacity
+                  onPress={() => openMaps(lat, lng)}
+                  activeOpacity={0.85}
+                >
+                  <Image
+                    source={{ uri: item.location.mapUrl }}
+                    style={styles.map}
+                    resizeMode="cover"
+                    onError={() =>
+                      setMapErrors((prev) => ({ ...prev, [item.id]: true }))
+                    }
+                  />
+                </TouchableOpacity>
+              ) : (
+                <View style={[styles.map, styles.mapPlaceholder]}>
+                  <Text style={styles.placeholderText}>Mapa no disponible</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {renderTimeline(item?.statusHistory)}
+        </View>
+      );
+    },
+    [mapErrors]
+  );
+
   return (
     <ScreenContainer>
       <Header title="Mis Órdenes" />
 
-      {loading && sortedOrders.length === 0 && <Text style={styles.center}>Cargando...</Text>}
-      {error && <Text style={styles.center}>Error: {error}</Text>}
-      {!loading && sortedOrders.length === 0 && <Text style={styles.center}>No tenés órdenes</Text>}
+      {loading && sortedOrders.length === 0 && (
+        <Text style={styles.center}>Cargando...</Text>
+      )}
+      {!!error && <Text style={styles.center}>Error: {error}</Text>}
+      {!loading && sortedOrders.length === 0 && (
+        <Text style={styles.center}>No tenés órdenes</Text>
+      )}
 
       <FlatList
         data={sortedOrders}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={sortedOrders.length === 0 && !loading ? styles.emptyList : null}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}
+        keyExtractor={(item, index) => String(item?.id ?? index)}
+        contentContainerStyle={
+          sortedOrders.length === 0 && !loading ? styles.emptyList : null
+        }
+        refreshControl={
+          <RefreshControl refreshing={!!loading} onRefresh={onRefresh} />
+        }
         initialNumToRender={8}
         windowSize={7}
         removeClippedSubviews
-        renderItem={({ item }) => {
-          const total = Number(item.total) || 0;
-
-          const productsCount = Array.isArray(item.items)
-            ? item.items.reduce((acc, p) => acc + (Number(p.quantity) || 0), 0)
-            : 0;
-
-          const shipping = item.shipping || null;
-          const fee = shipping?.fee != null ? Number(shipping.fee) : null;
-          const eta = shipping?.etaMinutes != null ? Number(shipping.etaMinutes) : null;
-
-          const lat = item.location?.latitude;
-          const lng = item.location?.longitude;
-
-          return (
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.bold}>Orden #{item.id}</Text>
-                {renderStatusChip(item.status)}
-              </View>
-
-              <Text>Fecha: {formatDate(item.createdAt)}</Text>
-              <Text>Total: ${total}</Text>
-              <Text>Productos: {productsCount}</Text>
-
-              {(shipping || item.addressText) && (
-                <View style={styles.block}>
-                  <Text style={styles.subtitle}>Envío</Text>
-                  {shipping?.method && (
-                    <Text>Método: {shipping.method === "pickup" ? "Retiro" : "Delivery"}</Text>
-                  )}
-                  {fee != null && !Number.isNaN(fee) && <Text>Costo: ${fee}</Text>}
-                  {eta != null && !Number.isNaN(eta) && <Text>ETA: {eta} min</Text>}
-                  {item.addressText && <Text>Dirección: {item.addressText}</Text>}
-                </View>
-              )}
-
-              {lat != null && lng != null && (
-                <View style={styles.block}>
-                  <Text style={styles.subtitle}>Ubicación</Text>
-                  <Text>
-                    ({lat}, {lng})
-                  </Text>
-
-                  {item.location?.mapUrl && !mapErrors[item.id] ? (
-                    <TouchableOpacity onPress={() => openMaps(lat, lng)} activeOpacity={0.85}>
-                      <Image
-                        source={{ uri: item.location.mapUrl }}
-                        style={styles.map}
-                        resizeMode="cover"
-                        onError={() => setMapErrors((prev) => ({ ...prev, [item.id]: true }))}
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={[styles.map, styles.mapPlaceholder]}>
-                      <Text style={styles.placeholderText}>Mapa no disponible</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {renderTimeline(item.statusHistory)}
-            </View>
-          );
-        }}
+        renderItem={renderItem}
       />
     </ScreenContainer>
   );

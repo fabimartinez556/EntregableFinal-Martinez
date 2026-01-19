@@ -1,3 +1,4 @@
+// src/screens/CartScreen.js
 import {
   View,
   Text,
@@ -38,6 +39,15 @@ export default function CartScreen({ navigation }) {
     }, 0);
   }, [cartItems]);
 
+  // Resumen envío (mismo cálculo que en ordersThunks para que coincida)
+  const shippingPreview = useMemo(() => {
+    if (shippingMethod === "pickup") {
+      return { method: "pickup", fee: 0, etaMinutes: null, label: "Retiro en sucursal" };
+    }
+    const fee = total >= 30000 ? 0 : 2500;
+    return { method: "delivery", fee, etaMinutes: 45, label: "Delivery" };
+  }, [shippingMethod, total]);
+
   const handleRemove = useCallback(
     (id) => {
       dispatch(removeFromCartAndPersist(id));
@@ -71,7 +81,10 @@ export default function CartScreen({ navigation }) {
       try {
         location = await getUserLocationWithMapAndAddress();
       } catch (error) {
-        Alert.alert("Ubicación requerida", error?.message || "No se pudo obtener ubicación");
+        Alert.alert(
+          "Ubicación requerida",
+          error?.message || "No se pudo obtener ubicación"
+        );
         return;
       }
     }
@@ -101,21 +114,58 @@ export default function CartScreen({ navigation }) {
           <View style={styles.shippingRow}>
             <Pressable
               onPress={() => setShippingMethod("delivery")}
-              style={[styles.pill, shippingMethod === "delivery" && styles.pillActive]}
+              style={[
+                styles.pill,
+                shippingMethod === "delivery" && styles.pillActive,
+              ]}
+              disabled={ordersLoading}
             >
-              <Text style={[styles.pillText, shippingMethod === "delivery" && styles.pillTextActive]}>
+              <Text
+                style={[
+                  styles.pillText,
+                  shippingMethod === "delivery" && styles.pillTextActive,
+                ]}
+              >
                 Delivery
               </Text>
             </Pressable>
 
             <Pressable
               onPress={() => setShippingMethod("pickup")}
-              style={[styles.pill, shippingMethod === "pickup" && styles.pillActive]}
+              style={[
+                styles.pill,
+                shippingMethod === "pickup" && styles.pillActive,
+              ]}
+              disabled={ordersLoading}
             >
-              <Text style={[styles.pillText, shippingMethod === "pickup" && styles.pillTextActive]}>
+              <Text
+                style={[
+                  styles.pillText,
+                  shippingMethod === "pickup" && styles.pillTextActive,
+                ]}
+              >
                 Retiro
               </Text>
             </Pressable>
+          </View>
+
+          <View style={styles.shippingBox}>
+            <Text style={styles.shippingTitle}>Envío</Text>
+            <Text>Método: {shippingPreview.label}</Text>
+            <Text>Costo: ${shippingPreview.fee}</Text>
+            {shippingPreview.etaMinutes != null && (
+              <Text>ETA: {shippingPreview.etaMinutes} min</Text>
+            )}
+            {shippingMethod === "pickup" && (
+              <Text style={styles.shippingNote}>
+                Retiro: se guarda sin ubicación.
+              </Text>
+            )}
+            {shippingMethod === "delivery" && (
+              <Text style={styles.shippingNote}>
+                Delivery: se solicitará tu ubicación al confirmar.
+              </Text>
+            )}
           </View>
 
           <FlatList
@@ -140,7 +190,9 @@ export default function CartScreen({ navigation }) {
               </View>
             )}
             ListFooterComponent={
-              cartItems.length > 0 ? <Text style={styles.total}>Total: ${total}</Text> : null
+              cartItems.length > 0 ? (
+                <Text style={styles.total}>Total: ${total}</Text>
+              ) : null
             }
           />
 
@@ -196,6 +248,24 @@ const styles = StyleSheet.create({
   },
   pillTextActive: {
     color: "#111",
+  },
+  shippingBox: {
+    marginHorizontal: 10,
+    marginBottom: 6,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+  },
+  shippingTitle: {
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  shippingNote: {
+    marginTop: 6,
+    color: "#666",
+    fontSize: 12,
   },
   item: {
     borderBottomWidth: 1,
