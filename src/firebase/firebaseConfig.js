@@ -1,7 +1,9 @@
-import { initializeApp } from "firebase/app";
+
+// src/firebase/firebaseConfig.js
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDGdeZyGyRnYE_mYRMcrJcypGJBOo5Ooyg",
@@ -10,15 +12,11 @@ const firebaseConfig = {
   storageBucket: "react-app-8a129.appspot.com",
   messagingSenderId: "943216671512",
   appId: "1:943216671512:web:bc4a33e0dfa0bb175e3c6d",
+  databaseURL: "https://react-app-8a129-default-rtdb.firebaseio.com",
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// 🔐 Auth (compatible con Expo)
 export const auth = getAuth(app);
-
-// 🔥 Firestore
 export const db = getFirestore(app);
-
-// 🔁 Realtime Database
 export const realtimeDb = getDatabase(app);

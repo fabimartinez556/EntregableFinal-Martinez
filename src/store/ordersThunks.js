@@ -1,25 +1,27 @@
 import { doc, runTransaction } from "firebase/firestore";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { db, realtimeDb } from "../firebase/firebaseConfig";
-import {
-  setOrders,
-  setOrdersLoading,
-  setOrdersError,
-  setOrdersFinished,
-} from "./ordersSlice";
-import { clearCart } from "./cartSlice";
+import { setOrders, setOrdersLoading, setOrdersError, setOrdersFinished } from "./ordersSlice";
 import { fetchProducts } from "./productsThunks";
 import { showToast } from "./uiSlice";
 import { ref, push, set, get } from "firebase/database";
 import { GOOGLE_MAPS_API_KEY } from "../config/googleMaps";
+import { readOrdersCache, saveOrdersCache } from "../data/database";
+import { clearCartAndPersist } from "./cartThunks";
 
 /* =======================
-   FETCH ORDERS (REALTIME DB)
+   FETCH ORDERS (CACHE -> REALTIME)
 ======================= */
 export const fetchOrders = (userId) => {
   return async (dispatch) => {
     try {
       dispatch(setOrdersLoading());
+
+      try {
+        const cached = await readOrdersCache(userId, 50);
+        if (Array.isArray(cached) && cached.length > 0) dispatch(setOrders(cached));
+      } catch (e) {
+        console.log("Cache orders error:", e);
+      }
 
       const snapshot = await get(ref(realtimeDb, `orders/${userId}`));
 
@@ -30,14 +32,26 @@ export const fetchOrders = (userId) => {
 
       const data = snapshot.val();
 
-      const orders = Object.entries(data).map(([id, order]) => ({
-        id,
-        ...order,
-      }));
+      const orders = Object.entries(data).map(([id, order]) => {
+        const rawItems = order?.items;
+        const itemsArray = Array.isArray(rawItems)
+          ? rawItems
+          : rawItems && typeof rawItems === "object"
+          ? Object.values(rawItems)
+          : [];
+        return { id, ...order, items: itemsArray };
+      });
 
+      orders.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
       dispatch(setOrders(orders));
+
+      try {
+        await saveOrdersCache(userId, orders);
+      } catch (e) {
+        console.log("Save orders cache error:", e);
+      }
     } catch (error) {
-      dispatch(setOrdersError(error.message));
+      dispatch(setOrdersError(error?.message || "Error al cargar órdenes"));
     }
   };
 };
@@ -45,76 +59,87 @@ export const fetchOrders = (userId) => {
 /* =======================
    CREATE ORDER
 ======================= */
-export const createOrder = (items, total, user, location, onComplete) => {
+export const createOrder = (items, total, user, location, shippingMethod = "delivery", onComplete) => {
   return async (dispatch) => {
     try {
       dispatch(setOrdersLoading());
 
-      /* 🔒 VALIDAR Y DESCONTAR STOCK */
+      // Transaction: primero lee TODO, después escribe TODO
       await runTransaction(db, async (transaction) => {
-        for (const item of items) {
-          const productRef = doc(db, "productos", item.id);
-          const snap = await transaction.get(productRef);
+        const rows = (Array.isArray(items) ? items : []).map((it) => {
+          const productId = it?.id != null ? String(it.id) : null;
+          const qty = Number(it?.quantity) || 0;
+          return { productId, qty, title: it?.title || "producto" };
+        });
 
-          if (!snap.exists()) {
-            throw new Error("Producto inexistente");
-          }
+        if (rows.some((r) => !r.productId)) throw new Error("Producto sin id");
+        if (rows.some((r) => r.qty <= 0)) throw new Error("Cantidad inválida");
 
-          const stock = snap.data().stock;
-          if (stock < item.quantity) {
-            throw new Error(`Stock insuficiente de ${item.title}`);
-          }
+        const reads = await Promise.all(
+          rows.map(async (r) => {
+            const refDoc = doc(db, "productos", r.productId);
+            const snap = await transaction.get(refDoc);
+            return { ...r, refDoc, snap };
+          })
+        );
 
-          transaction.update(productRef, {
-            stock: stock - item.quantity,
-          });
+        for (const r of reads) {
+          if (!r.snap.exists()) throw new Error("Producto inexistente");
+          const stock = Number(r.snap.data()?.stock) || 0;
+          if (stock < r.qty) throw new Error(`Stock insuficiente de ${r.title}`);
+        }
+
+        for (const r of reads) {
+          const stock = Number(r.snap.data()?.stock) || 0;
+          transaction.update(r.refDoc, { stock: stock - r.qty });
         }
       });
 
-      /* 🗺️ MAPA ESTÁTICO GOOGLE */
-      const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${location.latitude},${location.longitude}&zoom=15&size=600x300&markers=color:red%7C${location.latitude},${location.longitude}&key=${GOOGLE_MAPS_API_KEY}`;
+      const now = Date.now();
 
-      /* 🧾 CREAR ORDEN */
-      const orderRef = push(ref(realtimeDb, `orders/${user.uid}`));
+      const method = shippingMethod === "pickup" ? "pickup" : "delivery";
+      const fee = method === "pickup" ? 0 : Number(total) >= 30000 ? 0 : 2500;
+      const etaMinutes = method === "pickup" ? 0 : 45;
 
-      await set(orderRef, {
+      const lat = location?.latitude ?? null;
+      const lng = location?.longitude ?? null;
+
+      // Si es delivery, exigimos ubicación
+      if (method === "delivery" && (lat == null || lng == null)) {
+        throw new Error("Ubicación requerida para delivery");
+      }
+
+      const mapUrl =
+        GOOGLE_MAPS_API_KEY && lat != null && lng != null
+          ? `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=15&size=600x300&markers=color:red%7C${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`
+          : null;
+
+      const orderPayload = {
         items,
         total,
         email: user.email,
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          mapUrl,
-        },
+        shipping: { method, fee, etaMinutes },
+        location: lat != null && lng != null ? { latitude: lat, longitude: lng, mapUrl } : null,
+        addressText: location?.addressText ?? null,
         status: "pendiente",
-        createdAt: Date.now(),
-      });
+        statusHistory: [{ status: "pendiente", at: now }],
+        createdAt: now,
+      };
 
-      /* 🧼 LIMPIEZA */
-      dispatch(clearCart());
-      await AsyncStorage.removeItem("@cart");
+      const orderRef = push(ref(realtimeDb, `orders/${user.uid}`));
+      await set(orderRef, orderPayload);
 
-      /* 🔄 REFRESH */
+      await dispatch(clearCartAndPersist());
+
       dispatch(fetchProducts());
       dispatch(fetchOrders(user.uid));
 
-      dispatch(
-        showToast({
-          message: "Compra realizada con éxito 🎉",
-          type: "success",
-        })
-      );
-
+      dispatch(showToast({ message: "Compra realizada con éxito 🎉", type: "success" }));
       dispatch(setOrdersFinished());
       onComplete?.();
     } catch (error) {
-      dispatch(setOrdersError(error.message));
-      dispatch(
-        showToast({
-          message: error.message || "Error al confirmar compra",
-          type: "error",
-        })
-      );
+      dispatch(setOrdersError(error?.message || "Error al confirmar compra"));
+      dispatch(showToast({ message: error?.message || "Error al confirmar compra", type: "error" }));
     }
   };
 };

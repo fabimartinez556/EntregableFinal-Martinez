@@ -1,3 +1,4 @@
+// src/store/authThunks.js
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -7,60 +8,62 @@ import {
 import { auth } from "../firebase/firebaseConfig";
 import { setLoading, setError, setUser, logout } from "./authSlice";
 
-/* =======================
-   LOGIN
-======================= */
 export const login = ({ email, password }) => {
   return async (dispatch) => {
     try {
       dispatch(setLoading(true));
+      dispatch(setError(null));
 
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email.trim(),
-        password,
+        password
       );
 
-      // ✅ GUARDAR USUARIO EN REDUX
-      dispatch(setUser(userCredential.user));
+      dispatch(
+        setUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+        })
+      );
     } catch (error) {
-      dispatch(setError(error.message));
-    } finally {
+      dispatch(setError(error?.message || "Error al iniciar sesión"));
       dispatch(setLoading(false));
     }
   };
 };
 
-/* =======================
-   REGISTER
-======================= */
 export const register = ({ email, password }) => {
   return async (dispatch) => {
     try {
       dispatch(setLoading(true));
+      dispatch(setError(null));
 
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email.trim(),
-        password,
+        password
       );
 
-      // ✅ GUARDAR USUARIO EN REDUX
-      dispatch(setUser(userCredential.user));
+      dispatch(
+        setUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+        })
+      );
     } catch (error) {
-      dispatch(setError(error.message));
-    } finally {
+      dispatch(setError(error?.message || "Error al registrarse"));
       dispatch(setLoading(false));
     }
   };
 };
 
-/* =======================
-   LOGOUT
-======================= */
 export const logoutUser = () => {
   return async (dispatch) => {
-    await signOut(auth);
-    dispatch(logout());
+    try {
+      await signOut(auth);
+    } finally {
+      dispatch(logout());
+    }
   };
 };

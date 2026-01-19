@@ -8,24 +8,24 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/firebase/firebaseConfig";
 import { loadCart } from "./src/store/cartThunks";
 import Toast from "./src/components/Toast";
+import { initDb } from "./src/data/database";
 
 function AppContent() {
   const dispatch = useDispatch();
 
   useEffect(() => {
-    dispatch(loadCart());
+    (async () => {
+      try {
+        await initDb();
+      } catch (e) {
+        console.log("DB init error:", e);
+      }
+      dispatch(loadCart());
+    })();
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        dispatch(
-          setUser({
-            uid: user.uid,
-            email: user.email,
-          })
-        );
-      } else {
-        dispatch(logout());
-      }
+      if (user) dispatch(setUser({ uid: user.uid, email: user.email }));
+      else dispatch(logout());
     });
 
     return unsubscribe;

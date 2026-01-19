@@ -1,3 +1,4 @@
+// src/store/store.js
 import { configureStore } from "@reduxjs/toolkit";
 
 import cartReducer from "./cartSlice";
@@ -12,6 +13,10 @@ export const store = configureStore({
     auth: authReducer,
     orders: ordersReducer,
     products: productsReducer,
-    ui: uiReducer, 
+    ui: uiReducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: true,
+    }),
 });

@@ -1,27 +1,34 @@
+// src/store/uiSlice.js
 import { createSlice } from "@reduxjs/toolkit";
+
+const initialState = {
+  toast: {
+    visible: false,
+    message: "",
+    type: "success", // "success" | "error" | "info"
+  },
+};
 
 const uiSlice = createSlice({
   name: "ui",
-  initialState: {
-    toast: {
-      visible: false,
-      message: "",
-      type: "success",
-    },
-  },
+  initialState,
   reducers: {
     showToast(state, action) {
+      const payload = action.payload || {};
       state.toast = {
         visible: true,
-        message: action.payload.message,
-        type: action.payload.type || "success",
+        message: String(payload.message || ""),
+        type: payload.type || "success",
       };
     },
     hideToast(state) {
-      state.toast.visible = false;
+      state.toast = { ...state.toast, visible: false };
+    },
+    resetToast(state) {
+      state.toast = { ...initialState.toast };
     },
   },
 });
 
-export const { showToast, hideToast } = uiSlice.actions;
+export const { showToast, hideToast, resetToast } = uiSlice.actions;
 export default uiSlice.reducer;

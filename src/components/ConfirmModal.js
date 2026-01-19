@@ -1,3 +1,4 @@
+// src/components/ConfirmModal.js
 import { View, Text, Modal, StyleSheet, Pressable } from "react-native";
 
 export default function ConfirmModal({
@@ -11,7 +12,7 @@ export default function ConfirmModal({
     <Modal
       transparent
       animationType="fade"
-      visible={visible}
+      visible={!!visible}
       onRequestClose={onCancel}
     >
       <View style={styles.overlay}>
@@ -20,12 +21,15 @@ export default function ConfirmModal({
           <Text style={styles.message}>{message || "¿Estás seguro?"}</Text>
 
           <View style={styles.actions}>
-            <Pressable style={styles.cancel} onPress={onCancel}>
+            <Pressable
+              style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
+              onPress={onCancel}
+            >
               <Text>Cancelar</Text>
             </Pressable>
 
             <Pressable
-              style={styles.confirm}
+              style={({ pressed }) => [styles.confirm, pressed && styles.pressed]}
               onPress={onConfirm}
               android_ripple={{ color: "#ffffff33" }}
             >
@@ -44,12 +48,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
+    pointerEvents: "auto",
   },
   modal: {
     width: "85%",
     backgroundColor: "#fff",
     padding: 20,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e6e6e6",
   },
   title: {
     fontSize: 18,
@@ -66,15 +73,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cancel: {
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   confirm: {
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     backgroundColor: "teal",
     borderRadius: 6,
   },
   confirmText: {
     color: "#fff",
     fontWeight: "600",
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

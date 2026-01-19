@@ -6,17 +6,17 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Pressable,
 } from "react-native";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ScreenContainer from "../components/ScreenContainer";
 import Header from "../components/Header";
 import ConfirmModal from "../components/ConfirmModal";
-import { removeFromCart } from "../store/cartSlice";
-import { saveCart } from "../store/cartThunks";
+import { removeFromCartAndPersist } from "../store/cartThunks";
 import { createOrder } from "../store/ordersThunks";
-import { getCurrentLocation } from "../services/LocationService";
-import { getUserLocationWithMap } from "../services/LocationService";
+import { getUserLocationWithMapAndAddress } from "../services/LocationService";
+import { showToast } from "../store/uiSlice";
 
 export default function CartScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -27,16 +27,24 @@ export default function CartScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  const total = cartItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
+  // delivery | pickup
+  const [shippingMethod, setShippingMethod] = useState("delivery");
 
-  const handleRemove = (id) => {
-    const updatedCart = cartItems.filter((item) => item.id !== id);
-    dispatch(removeFromCart(id));
-    dispatch(saveCart(updatedCart));
-  };
+  const total = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const price = Number(item.price) || 0;
+      const qty = Number(item.quantity) || 0;
+      return sum + price * qty;
+    }, 0);
+  }, [cartItems]);
+
+  const handleRemove = useCallback(
+    (id) => {
+      dispatch(removeFromCartAndPersist(id));
+      dispatch(showToast({ message: "Producto eliminado", type: "info" }));
+    },
+    [dispatch]
+  );
 
   const confirmRemove = () => {
     if (!selectedItem) return;
@@ -44,25 +52,36 @@ export default function CartScreen({ navigation }) {
     setSelectedItem(null);
     setModalVisible(false);
   };
-  const handleCheckout = async () => {
-  if (!user) {
-    Alert.alert("Error", "Debés estar logueado");
-    return;
-  }
 
-  try {
-    const location = await getUserLocationWithMap();
+  const handleCheckout = async () => {
+    if (!user) {
+      Alert.alert("Error", "Debés estar logueado");
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      Alert.alert("Carrito vacío", "Agregá productos antes de comprar");
+      return;
+    }
+
+    let location = null;
+
+    // Para delivery pedimos ubicación sí o sí
+    if (shippingMethod === "delivery") {
+      try {
+        location = await getUserLocationWithMapAndAddress();
+      } catch (error) {
+        Alert.alert("Ubicación requerida", error?.message || "No se pudo obtener ubicación");
+        return;
+      }
+    }
 
     dispatch(
-      createOrder(cartItems, total, user, location, () => {
+      createOrder(cartItems, total, user, location, shippingMethod, () => {
         navigation.navigate("Orders");
       })
     );
-  } catch (error) {
-    Alert.alert("Ubicación requerida", error.message);
-  }
-};
-
+  };
 
   return (
     <ScreenContainer>
@@ -79,9 +98,32 @@ export default function CartScreen({ navigation }) {
         <Text style={styles.empty}>Carrito vacío</Text>
       ) : (
         <>
+          <View style={styles.shippingRow}>
+            <Pressable
+              onPress={() => setShippingMethod("delivery")}
+              style={[styles.pill, shippingMethod === "delivery" && styles.pillActive]}
+            >
+              <Text style={[styles.pillText, shippingMethod === "delivery" && styles.pillTextActive]}>
+                Delivery
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShippingMethod("pickup")}
+              style={[styles.pill, shippingMethod === "pickup" && styles.pillActive]}
+            >
+              <Text style={[styles.pillText, shippingMethod === "pickup" && styles.pillTextActive]}>
+                Retiro
+              </Text>
+            </Pressable>
+          </View>
+
           <FlatList
             data={cartItems}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => String(item.id)}
+            initialNumToRender={10}
+            windowSize={7}
+            removeClippedSubviews
             renderItem={({ item }) => (
               <View style={styles.item}>
                 <Text style={styles.title}>{item.title}</Text>
@@ -97,12 +139,13 @@ export default function CartScreen({ navigation }) {
                 />
               </View>
             )}
+            ListFooterComponent={
+              cartItems.length > 0 ? <Text style={styles.total}>Total: ${total}</Text> : null
+            }
           />
 
-          <Text style={styles.total}>Total: ${total}</Text>
-
           <Button
-            title="Finalizar compra"
+            title={ordersLoading ? "Procesando..." : "Finalizar compra"}
             onPress={handleCheckout}
             disabled={ordersLoading}
           />
@@ -112,9 +155,7 @@ export default function CartScreen({ navigation }) {
       <ConfirmModal
         visible={modalVisible}
         title="Eliminar producto"
-        message={
-          selectedItem ? `¿Eliminar ${selectedItem.title} del carrito?` : ""
-        }
+        message={selectedItem ? `¿Eliminar ${selectedItem.title} del carrito?` : ""}
         onConfirm={confirmRemove}
         onCancel={() => {
           setSelectedItem(null);
@@ -131,9 +172,35 @@ const styles = StyleSheet.create({
     marginTop: 40,
     fontSize: 16,
   },
+  shippingRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
+  },
+  pillActive: {
+    borderColor: "#111",
+  },
+  pillText: {
+    fontWeight: "700",
+    fontSize: 12,
+    color: "#333",
+  },
+  pillTextActive: {
+    color: "#111",
+  },
   item: {
     borderBottomWidth: 1,
     paddingVertical: 12,
+    paddingHorizontal: 10,
   },
   title: {
     fontWeight: "bold",
